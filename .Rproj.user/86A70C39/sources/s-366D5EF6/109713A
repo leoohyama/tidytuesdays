@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1606237242328.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "109713A",
+    "lastKnownWriteTime" : 1598042347,
+    "last_content_update" : 1598042347,
+    "path" : "~/Google Drive/Manuscripts/Women_in_myrmecology/Analysis&Graphs_Script.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "444,22",
+        "scrollLine" : "428"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

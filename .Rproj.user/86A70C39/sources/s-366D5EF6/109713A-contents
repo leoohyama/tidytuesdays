@@ -1,0 +1,2099 @@
+#Paper data analysis and graphs
+
+#load packages
+library(broom)
+library(tidyverse)
+library(lme4)
+library(MuMIn)
+library(MASS)
+library(bbmle)
+library(emmeans)
+
+#load data for publications
+currentdecs<- read.csv("~/Downloads/current_decs_master_1MAY_RAA_071819.csv")
+
+#load clean data for publications
+currentdecs<- read.csv("~/Downloads/currentdecs2.csv")
+
+
+##number of unique authors
+length(unique(currentdecs$groupID))
+
+##number of unique publications
+length(unique(currentdecs$refID))
+
+
+#top authors by paper numbers
+top<-currentdecs %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n())  %>%
+  filter(groupID == 1081) %>%
+  ungroup()
+country_aff<-unique(currentdecs[,c("groupID", "country")])
+
+top2<-left_join(top, country_aff, by = "groupID")
+top2<-top2 %>%
+  filter(! is.na(country))
+setwd("~/Desktop/")
+write.csv(top2, "topauthors.csv")
+
+currentdecs %>%
+  filter(groupID == 1088)
+
+##how many papers averaged annually?
+mean_yearly<-currentdecs %>% group_by(groupID, PY) %>%
+  summarise(total = n()) %>%
+  group_by(PY) %>%
+  summarise(total_sum= n())
+mean(mean_yearly$total_sum)
+
+
+#average number of papers per year by an author based on sex 
+
+
+
+mean_yearly<-currentdecs %>% group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) 
+
+mean(mean_yearly$total[mean_yearly$Final_Gender == "female"])
+mean(mean_yearly$total[mean_yearly$Final_Gender == "male"])
+mean(mean_yearly$total[mean_yearly$Final_Gender == "?"])
+
+
+sum(mean_yearly$total[mean_yearly$Final_Gender == "female"])
+sum(mean_yearly$total[mean_yearly$Final_Gender == "male"])
+sum(mean_yearly$total[mean_yearly$Final_Gender == "?"])
+
+
+#caluclate total proportion of women on papers vs. men on papers
+currentdecs %>% 
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  ungroup() %>%
+  group_by(Final_Gender) %>%
+  summarise(total_paper = sum(total))
+
+#caluclate total proportion of women  on papers across years
+femals_across_time<-currentdecs %>% 
+  group_by(PY, groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  ungroup() %>%
+  group_by(PY,Final_Gender) %>%
+  summarise(total_paper = sum(total)) %>%
+  mutate(props = total_paper/sum(total_paper)) %>%
+  filter(Final_Gender == "female") %>%
+  ungroup()
+
+
+
+#caluclate average proportion across countries for proportion of women on papers vs. men on papers
+star<-currentdecs %>% 
+  group_by(groupID,country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country, Final_Gender) %>%
+  group_by(country, Final_Gender) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA") %>%
+  ungroup() %>%
+  group_by(country) %>%
+  mutate(total_country_authors = sum(total_authors)) %>%
+  mutate(props = total_authors/total_country_authors) %>%
+  filter(Final_Gender == "female")
+
+
+#caluclate total proportion of women  vs. men authors yearly
+numbersofseex<-currentdecs %>% 
+  dplyr::group_by(PY,groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(totals = n()) %>%
+  mutate(props = totals/ sum(totals))
+
+
+#average number of total papers yearly
+no_paper_over_time <-currentdecs %>%
+  group_by(PY, refID) %>%
+  summarise(total = n()) %>%
+  dplyr::select(PY, refID) %>%
+  group_by(PY) %>%
+  summarise(total = n())
+mean(no_paper_over_time$total)
+
+
+
+#lets look at average publications by sex
+#check average paper numbers
+
+###this is when you total up the papers and divide them by the number of unique authors by sex
+#so this would be called avergae paper count by sex (over the entire period of the decade)
+currentdecs %>% 
+  dplyr::group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) %>%
+  dplyr::select(Final_Gender,total_mean, total_se)
+
+trial<-currentdecs %>% 
+  dplyr::group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) 
+length(trial$total[trial$Final_Gender == "female"])#this showcases what the denominator is
+
+#calculating averages yearly
+trial<-currentdecs %>% 
+  dplyr::group_by(groupID, PY, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(means = mean(total), totals = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n())))
+
+
+#calculating yearly averages in top ten countries
+num_observ__by_top_ten<- currentdecs %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  dplyr::group_by(groupID,PY, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(means = mean(total), totals = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n())))
+
+#calculating total averages for top ten countries
+num_observ__by_top_ten<- currentdecs %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  dplyr::group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) %>%
+  dplyr::select(Final_Gender,total_mean, total_se)
+
+
+#calculating averages 2008
+trial08<-currentdecs %>% 
+  filter(PY == 2008) %>%
+  dplyr::group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) 
+
+
+#calculating averages 2017
+trial17<-currentdecs %>% 
+  filter(PY == 2017) %>%
+  dplyr::group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) 
+
+
+currentdecs %>% 
+  dplyr::group_by(groupID, PY, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(means = mean(total)) %>%
+  group_by(Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) %>%
+  dplyr::select(Final_Gender,total_mean, total_se)
+
+#lets look at avergae publications by sex
+#check average paper numbers by year
+currentdecs %>% 
+  dplyr::group_by(PY,groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY,Final_Gender) %>%
+  summarise_each(funs(mean,sd,se=sd(.)/sqrt(n()))) %>%
+  dplyr::select(Final_Gender,total_mean, total_se) %>%
+  filter(PY == 2008 | PY == 2017)
+
+
+
+
+
+
+
+#calculate demographics of gender in main dataset
+#TOTAL NUMBER OF UNIQUE AUTHORS
+total_authors<-currentdecs %>% 
+  group_by(groupID, Final_Gender)%>%
+  summarise(total = n()) 
+nrow(total_authors) #8105 unique authors
+
+males<-currentdecs %>% 
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  filter(Final_Gender == "male")
+nrow(males) #5120 males
+females<-currentdecs %>% 
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  filter(Final_Gender == "female")
+nrow(females) #2671 males
+
+unknown<-currentdecs %>% 
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  filter(Final_Gender == "?")
+nrow(unknown) #314 unknown
+
+#male or female combined proportion
+(2671 + 5120) / 8105
+2671 / 8105
+5120 /  8105
+314/8105
+
+#yearly female numbers
+yearly_props<-currentdecs %>% 
+  group_by(PY, Final_Gender)%>%
+  summarise(total = n())  %>%
+  group_by(PY) %>%
+  mutate(proportions = total/ sum(total)) %>%
+  filter(Final_Gender == "female")
+mean(yearly_props$proportions)
+yearly_props_all<-currentdecs %>% 
+  group_by(PY, Final_Gender)%>%
+  summarise(total = n())  %>%
+  group_by(PY) %>%
+  mutate(proportions = total/ sum(total)) 
+
+#yearly male numbers
+yearly_props_male<-currentdecs %>% 
+  group_by(PY, Final_Gender)%>%
+  summarise(total = n())  %>%
+  group_by(PY) %>%
+  mutate(proportions = total/ sum(total)) %>%
+  filter(Final_Gender == "male")
+mean(yearly_props_male$proportions)
+
+unique(currentdecs$Final_Gender)
+#yearly unknown numbers
+yearly_props_unk<-currentdecs %>% 
+  group_by(PY, Final_Gender)%>%
+  summarise(total = n())  %>%
+  group_by(PY) %>%
+  mutate(proportions = total/ sum(total)) %>%
+  filter(Final_Gender == "?")
+mean(yearly_props_unk$proportions)
+
+
+#mean number of paeers for female and male and unknown for the decade
+currentdecs %>% 
+  group_by(groupID, Final_Gender)%>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise(mean_appers = mean(total))
+
+
+#let's look at female author proportions (no. of female authos vs. rest)
+
+currentdecs %>%
+  group_by(groupID, Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(total_unique_authors_per_year=n()) %>%
+  group_by(PY) %>%
+  mutate(total_authors_per_year = sum(total_unique_authors_per_year)) %>%
+  mutate(proportion_of_authors = total_unique_authors_per_year/total_authors_per_year) %>%
+  ungroup() %>%
+  ggplot(.) +
+  geom_bar(stat = "identity",aes(x = as.factor(PY), y = proportion_of_authors,
+                                 fill = Final_Gender), position = position_dodge()) +
+  labs(x= "Years 2007 to 2018", y = "Unique Author Sex Proportions", fill = "Sex of Author") +
+  theme_classic() + 
+  theme(axis.title = element_text(size = 15),
+        legend.text = element_text(size = 12), axis.text.y = element_text(size = 15)) +
+  scale_fill_manual(values = c("skyblue","dodgerblue3","lightsteelblue1"),
+                    labels = c("Unknown", "Female", "Male")) +
+  coord_flip()
+
+
+
+###let's look at publication rate for each unique author
+
+pub_rates<-currentdecs %>%
+  group_by(groupID, Final_Gender, PY) %>%
+  summarise(total_p = n()) %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(tot_paper_count = sum(total_p)) %>%
+  mutate(pub_rate = tot_paper_count/10) %>%
+  ungroup()
+
+pubrates_std_error<-pub_rates %>%
+  dplyr::select(Final_Gender, pub_rate) %>%
+  group_by(Final_Gender) %>%
+  summarise(n())
+  #summarise_each(funs(mean,sd,se=sd(.)/sqrt(n())))
+
+pub_rates_yearly<-currentdecs %>%
+  group_by(groupID, Final_Gender, PY) %>%
+  summarise(total_p = n()) %>%
+  mutate(pub_rate = total_p/10) %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(avg_ppubrate = mean(pub_rate)) %>%
+  ungroup()
+
+#top countries by number of authors 
+
+length(unique(currentdecs$country)) #105 countries present NA counted as countryy number 106
+
+#let's look for the countries with the most authors (total) in our dataset by decade
+#note, we are looking for unique authors here as well
+country_total_authors<-currentdecs %>% 
+  group_by(groupID,country) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country) %>%
+  group_by(country) %>%
+  summarise(total_authors = n()) %>%
+  arrange(desc(total_authors)) %>%
+  filter(!country == "NA")
+sum(country_total_authors$total_authors)
+
+summary(country_total_authors$total_authors)
+
+
+currentdecs %>% 
+  group_by(groupID,country,yea) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country) %>%
+  group_by(country) %>%
+  summarise(total_authors = n()) %>%
+  arrange(desc(total_authors)) %>%
+  filter(!country == "NA")
+
+#let's see how much of the data is made up of these countries
+num_observ__by_top_ten<- currentdecs %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  ))
+nrow(num_observ__by_top_ten)/nrow(currentdecs)
+sort(unique(currentdecs$country))
+unique(num_observ__by_top_ten$country)
+
+###these country make up 69% of the total data
+
+#Figure X:x
+alpha_1<-currentdecs %>% 
+  group_by(groupID,country) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country) %>%
+  group_by(country) %>%
+  summarise(total_authors = n()) %>%
+  arrange(desc(total_authors)) %>%
+  filter(!country == "NA") %>%
+  filter(!total_authors < 170) %>% #this code gives up just the top 10
+  ggplot(.) + 
+  geom_bar(stat = "identity",
+           mapping = aes(x = fct_reorder(country, total_authors),
+                         y = total_authors)) + 
+  labs(x = "", y = "No. of Authors") + 
+  theme_classic() +
+  theme(axis.text.y = element_blank()) +
+  geom_text(aes(x =reorder(country, -total_authors),
+                y = total_authors,
+                label=total_authors), 
+            position=position_dodge(width=1),
+            hjust = -0.6) + ylim(0, 1900) +coord_flip() 
+alpha_1
+
+#Fix X.x top countries and their sex proportions
+
+newdata<-data.frame(country = c("USA", "Brazil", "Germany", "Peoples R China", 
+                                "Australia", "Japan",
+                                "France", "UK", "Spain", "Mexico"),
+                    Total_authors_new = c(1200, 1000, 350,400,350,350,350,350,350,350))
+
+Bravo_1<-currentdecs %>% 
+  group_by(groupID,country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country, Final_Gender) %>%
+  group_by(country, Final_Gender) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  ungroup() %>%
+  group_by(country) %>%
+  mutate(total_country_authors = sum(total_authors)) %>%
+  ggplot(.) + 
+  geom_bar(stat = "identity",
+           mapping = aes(x = fct_reorder(factor(country), total_country_authors),
+           y = -1*(total_authors), fill = Final_Gender), width = 0.8, 
+           position = position_dodge()) + 
+  labs(x = "", y = "Total No. of Authors Per Country", fill = "SEX") + 
+  scale_fill_manual(values=c("#333333", "#CCCCCC","grey51"),
+                    labels = c("Unknown", "Female", "Male"))  +
+  coord_flip() +
+  scale_x_discrete(name = "", position = "top") +
+  scale_y_continuous(name = "No. of Authors",
+                     breaks = seq(0,-1200, by = -300),
+                     labels = seq(0,1200, by = 300))  +
+  geom_text(data = newdata, 
+            position = position_dodge(width= 0),
+            aes(y=-1*(newdata$Total_authors_new), 
+                x = factor(newdata$country), label=newdata$country),
+            size =4,
+            hjust = 0.6,
+            vjust = 0) + theme_classic()+
+  theme(axis.text.y  = element_blank(),
+        legend.position = c(0.15,0.2)) +
+  scale_fill_manual(values = c("skyblue","dodgerblue3","lightsteelblue1"),
+                                                         labels = c("Unknown", "Female", "Male")) 
+Bravo_1
+
+
+
+
+library(patchwork) #patchwork may have to be installed via github
+Bravo_1 + alpha_1 +
+  plot_layout(ncol= 2, heights = c(1,1)) 
+
+###make a legitimat back to back bar plot?
+alpha2<-currentdecs %>% 
+  group_by(groupID,country) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country) %>%
+  group_by(country) %>%
+  summarise(total_authors = n()) %>%
+  arrange(desc(total_authors)) %>%
+  filter(!country == "NA") %>%
+  filter(!total_authors < 170) 
+
+#actual raw papers
+cvall<-currentdecs %>% 
+  group_by(refID,country) %>%
+  summarise(total = n()) %>%
+  dplyr::select(refID, country) %>%
+  group_by(country) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  ))
+
+
+Bravo2<-currentdecs %>% 
+  group_by(groupID,country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, country, Final_Gender) %>%
+  group_by(country, Final_Gender) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  ungroup() %>%
+  group_by(country) %>%
+  mutate(total_country_authors = sum(total_authors))
+
+#add number of papers
+Bravo2<-left_join(Bravo2, cvall, by = "country")
+colnames(Bravo2)<-c("country", "Final_Gender", "total_authors", "NAA", "orders")
+Bravo2$total_authors<-Bravo2$total_authors*-1
+mean(Bravo2$total_authors)
+
+Fig_biplot<-ggplot(data = NULL) +
+  geom_col(data = Bravo2, aes(x = fct_reorder(factor(country), orders), y = (total_authors), fill = Final_Gender),
+           width = 0.8, 
+           position = position_dodge()) +
+  geom_bar(data = cvall, stat = "identity",aes(x = fct_reorder(factor(country), total_authors), y = total_authors)) +
+  geom_text(data = cvall, aes(x =reorder(country, -total_authors),
+                y = total_authors,
+                label=total_authors), size = 8, 
+            position=position_dodge(width=1),
+            hjust = -0.05) + ylim(-1200, 2000) +
+  coord_flip() +
+  #scale_x_discrete(name = "", position = "top") +
+  scale_y_continuous(name = "No. of Authors                                      No. of Papers",
+                     breaks = seq(0,-1200, by = -300),
+                     labels = seq(0,1200, by = 300))  +
+  geom_text(data = newdata, 
+            position = position_dodge(width= 0),
+            aes(y=-1*(newdata$Total_authors_new), 
+                x = factor(newdata$country), label=newdata$country),
+            size =10,
+            hjust = 0.6,
+            vjust = 0) + theme_classic()+
+  theme(axis.text.y  = element_blank(), axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(), axis.line.y = element_blank(),
+        legend.position = c(0.15,0.2), legend.text = element_text(size = 25), 
+        legend.title = element_text(size = 25), axis.title.x = element_text(hjust= 0.45, size = 25),
+        axis.text = element_text(size =18)) +
+  scale_fill_manual(values = c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    labels = c("Unknown", "Women", "Men")) +
+  labs(fill = "Gender") 
+
+
+
+setwd("~/Desktop/WIM_PAPER_Figures/")
+ggsave("Figure_biplot.tiff", Fig_biplot, dpi = 400)
+ggsave("Figure_biplot.pdf", Fig_biplot, dpi = 600)
+
+sum(cvall$total_authors)
+
+unique_combos<-data.frame(unique(currentdecs[c("groupID", "country")]))
+head(unique_combos)
+rownumbers_dupes<-which(duplicated(unique_combos[,1]))
+duplicatedones<-unique_combos[rownumbers_dupes,]
+order(duplicatedones)
+
+
+
+#yearlyy averags for top ten countries
+Bravo3<-currentdecs %>% 
+  group_by(PY,groupID, country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(PY,groupID, country, Final_Gender) %>%
+  group_by(PY, country, Final_Gender) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  ungroup() %>%
+  group_by(PY, country) %>%
+  mutate(total_country_authors = sum(total_authors))
+
+wtf<-currentdecs %>% 
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  group_by(groupID,country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise(total_authors = n()) 
+
+wtf<-currentdecs %>% 
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  group_by(PY, groupID,country, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise(total_authors = n()) 
+
+
+
+###top tn countries stuff
+wtf2<-currentdecs %>% 
+  filter(!country == "NA") %>%
+  filter(country %in% c(
+    "USA", "Brazil", "Germany", "Peoples R China", "Australia", "Japan",
+    "France", "UK", "Spain", "Mexico"
+  )) %>%
+  group_by(PY, groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  group_by(PY,Final_Gender) %>%
+  summarise(total_authors = n()) %>%
+  group_by(Final_Gender) %>%
+  summarise(mean(total_authors))
+
+
+####new analyses Andrea's ideal version
+
+A1<-currentdecs %>% 
+  group_by(groupID,country,PY ,Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(country, PY, Final_Gender) %>%
+  group_by(country, PY) %>%
+  summarise(total_authors = n()) %>%
+  filter(!country == "NA")  #get dataset of total authors by country by year
+A1$PY <- as.factor(A1$PY) #make year factor
+
+ranks<-A1 %>% arrange(desc(total_authors)) %>%
+  filter(!total_authors < 10) #remove countries with less than ten total authors
+#to remove outliers
+
+###let's get rid of countries with less than 3 points in time
+countries_remove<-ranks %>%
+  group_by(country) %>%
+  summarise(tots = sum(n())) %>%
+  filter(tots < 3) %>%
+  dplyr::select(country)
+ranks_new<-ranks %>%
+  filter(!country %in% c("Benin", "Costa Rica", "Ecudaor",
+                         "El Salvador", "Estonia", "Israel",
+                         "Netherlands", "Portugal", "South Korea",
+                         "Sweden", "Thailand", "Uganda",
+                         "Ukraine"))
+
+
+hist(ranks_new$total_authors) #heavy skew in the distribution
+#check to see which country is our intercept
+sort(ranks_new$country)
+
+#run both poisson and neg binom models
+m1<-glmer.nb(data = ranks_new, total_authors ~ country + (1|PY),
+             nAGQ=0)#neg binom model
+m2<-glmer(data = ranks_new, total_authors ~ country + (1|PY),
+          family = "poisson") #poisson model
+m3<-lm(data = ranks_new, total_authors ~ 1) #null model
+
+AICtab(m1,m2,m3) #use aic to find most parsimonious model
+#neg binom is the most parsimonious
+
+#create a data table for the countries:
+table_paper<-data.frame(Countries = unique(ranks_new$country))
+write.csv(table_paper, "~/Desktop/table_paper_countries.csv")
+
+
+summary(m1)
+r.squaredGLMM(m1)
+
+broom::tidy(m1) %>%
+  dplyr::select(term,estimate, std.error) %>%
+  arrange(desc(estimate))
+
+#random effect of years add little variation of the story
+#we can use the model to rank countries based on total authorship in our database
+
+
+###Figure X.x country with model predictions
+
+newdat<-data.frame(countries=c(paste(unique(ranks_new$country)))) #make new data
+m2mm<-model.matrix(~countries,newdat) #cereate a model matrix of you paramters from the dummy data
+y<-m2mm%*%fixef(m1) #multiply the m2m2 matrix with the model coefficients
+pvar1 <- diag(m2mm %*% tcrossprod(vcov(m1),m2mm)) 
+
+newdat <- data.frame(
+  Countriees=newdat$countries,
+  y=exp(y),
+  plo = exp(y-1.96*sqrt(pvar1))
+  , phi = exp(y+1.96*sqrt(pvar1))
+)
+mean(ranks_new$total_authors)
+by_country_total_model<-ggplot(NULL) + 
+  geom_point(data = ranks_new, 
+             mapping = aes(x = as.factor(reorder(country, - total_authors)),
+                           y = total_authors), size = 3,
+             color = "red",
+             alpha =0.4) +
+  geom_hline(yintercept=49.2803, linetype="dashed", 
+             color = "black", size=1) +
+  labs(x = "Countries", y = "Number of Authors") +
+  theme_bw() +
+  theme(axis.text.x = element_blank(), axis.text.y = element_text(size = 15),
+        axis.title.y = element_blank(), axis.title.x = element_text(size = 15),
+        axis.ticks.x = element_blank(), panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+by_country_total_model
+setwd("~/Desktop/WIM_PAPER_Figures/")
+ggsave("Figure_X.tiff", by_country_total_model, dpi = 400)
+
+
+#now let's grab the variance of the raw data to show the variation between years
+#and plot it
+Years_total<-ggplot(ranks_new) +
+  geom_boxplot(mapping=aes(x = PY, y = total_authors)) +
+  scale_y_log10() +
+  coord_flip() +
+  theme_bw() +
+  labs(x = "Years", y = "Number of Authors") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.background = element_rect(fill = "gray95")) 
+Years_total
+#Final Figure being put together
+by_country_total_model + annotation_custom(ggplotGrob(Years_total), xmin = 32, xmax = 7, 
+                                           ymin = 100, ymax = 384)
+
+
+
+##########ASSESSING SINGLETONS
+
+#find singletons
+singleton_authors<-currentdecs %>%
+  group_by(groupID) %>%
+  summarise(total = n()) %>%
+  filter(total == 1) 
+
+#get total number of female and male singleton authors
+singles_year<-currentdecs %>% 
+  filter(groupID %in% as.numeric(singleton_authors$groupID)) %>%
+  dplyr::select(PY, Final_Gender) %>%
+  group_by(Final_Gender) %>%
+  summarise(total = n())
+
+
+#now let's grab year data for these single authors
+singles_year<-currentdecs %>% 
+  filter(groupID %in% as.numeric(singleton_authors$groupID)) %>%
+  dplyr::select(PY, Final_Gender) %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(singleton_totals = n()) %>%
+  mutate(sex_prop = singleton_totals/sum(singleton_totals))
+
+sum(singles_year$singleton_totals) #numbers check out
+#look for female male numbers in singletons
+currentdecs %>% 
+  filter(groupID %in% as.numeric(singleton_authors$groupID)) %>%
+  dplyr::select(PY, Final_Gender) %>%
+  group_by(Final_Gender) %>%
+  summarise(singleton_totals = n())
+#Singleton data total by sex by year
+singlton_year<-ggplot(singles_year) + 
+  geom_bar(stat = 'identity', position = position_dodge(),
+           mapping = aes(x= as.factor(PY), 
+                         y = singleton_totals, fill = Final_Gender)) +
+  labs(x = "Year", y = "Singleton Totals", fill = "Sex of Author") +
+  scale_fill_manual(values = c("skyblue","dodgerblue3","lightsteelblue1"),
+                    labels = c("Unknown", "Female", "Male"))+
+  labs(fill = "Sex of Author") + theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size =12),
+        axis.text.y = element_text(size = 12),
+        axis.title = element_text(size= 12),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 12))
+
+###let's add singletons and total counts for the graph
+total_backdrop<-currentdecs %>% 
+  group_by(groupID, Final_Gender, PY) %>%
+  dplyr::select(Final_Gender, PY)  %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  ungroup()
+
+total_backdrop$Final_Gender<-as.factor(total_backdrop$Final_Gender)
+levels(total_backdrop$Final_Gender)<-c("u", "f", "m")
+
+
+figure_singletons<-ggplot(data = NULL) + 
+  geom_bar(data = total_backdrop, stat = 'identity', position = position_dodge(),
+           mapping = aes(x= as.factor(PY), 
+                         y = total, color = Final_Gender), alpha =0.3, fill = "grey") +
+  geom_bar(data = singles_year, stat = 'identity', position = position_dodge(),
+           mapping = aes(x= as.factor(PY), 
+                         y = singleton_totals, fill = Final_Gender)) +
+  labs(x = "Year", y = "Singleton Totals", fill = "Gender") +
+  scale_fill_manual(labels = c("Unknown", "Women",  "Men"), 
+                    values = c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    ) +
+  scale_color_manual( 
+                    values = c("grey97","grey97", "grey97"),
+                    guide = F
+  ) +
+  labs(fill = "Gender") + theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size =18),
+        axis.text.y = element_text(size = 18),
+        axis.title = element_text(size= 18),
+        legend.text = element_text(size = 18),
+        legend.title = element_text(size = 18))
+setwd("~/Desktop/")
+ggsave("singletons.tiff", figure_singletons, dpi = 400)
+
+
+#let's assess female singleton authorship proportions using a model
+singles_year_female<-singles_year %>% #filter for just females
+  filter(Final_Gender == "female")
+
+singles_year_male<-singles_year %>% #filter for just males
+  filter(Final_Gender == "male")
+
+singles_year_two<-singles_year %>% #filter for both females and males
+  filter(!Final_Gender == "?")
+
+hist(singles_year_female$sex_prop) #assessing didstirbution
+#with ten data points, there's not much to assess
+# we need to use model residuals to diagnose assumption violations
+singles_year_female #we need to use years
+#as continuous in this case so double check the class of PY
+sing_female_model<-lm(data = singles_year_female, sex_prop~PY)
+summary(sing_female_model)
+
+sing_male_model<-lm(data = singles_year_male, sex_prop~PY)
+summary(sing_male_model)
+
+sing_male_model<-lm(data = singles_year_male, sex_prop~PY)
+summary(sing_male_model)
+
+
+modboth<-lm(data = singles_year_two, sex_prop~Final_Gender * PY)
+summary(modboth)
+
+
+
+par(mfrow=c(2,2))
+plot(modboth) #model residuals look decent
+#relatively even scatter between the residuals and fitted values
+#normality is passable
+par(mfrow=c(1,1))
+
+
+####Plot of our model
+singleton_model<-ggplot(data = singles_year_female, mapping = aes( x= PY, y = sex_prop)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(labels = c("2007", "2008", "2009", "2010", "2011",
+                              "2012", "2013", "2014", "2015", "2016",
+                              "2017", "2018"), breaks = c(seq(2007, 2018))) +
+  theme_classic() +
+    theme(axis.title.x = element_text(size = 18), 
+        axis.text.x = element_text(size = 18, angle = 45, hjust = 1),
+        axis.text.y = element_text(size =18),
+        axis.title.y = element_text(size = 18)) +
+  labs(x = "Year", y = "Proportion of Women Singleton Authors") 
+
+
+##figure
+figure_singletons + singleton_model +
+  plot_layout(ncol= 2) +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(size = 20, vjust = -125))
+setwd("~/Desktop/WIM_PAPER_Figures/")
+ggsave("singleton_figure.tiff", last_plot(), dpi = 400)
+ggsave("singleton_figure.pdf", last_plot(), dpi = 600)
+
+####Plot of our model
+ggplot(data = singles_year_two, mapping = aes( x= PY, y = sex_prop, color = Final_Gender)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic() +
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_text(size = 20, angle = 45, hjust = 1),
+        axis.text.y = element_text(size =20),
+        axis.title.y = element_text(size = 20)) +
+  scale_x_continuous(name = c("2007", "2008", "2009", "2010", "2011",
+                              "2012", "2013", "2014", "2015", "2016",
+                              "2017", "2018"), breaks = c(seq(2007, 2018))) +
+  labs(x = "Years", y = "Female Singleton Proportion") 
+
+
+
+
+###Average no. of papers per year by gender 
+#Inlcuding sing.letons
+avg_papers_with1s<-currentdecs %>% 
+  group_by(groupID, Final_Gender, PY) %>% 
+  summarize(paper_count=n()) %>% 
+  group_by(Final_Gender, PY) %>% 
+  summarize(avg_paper_count=mean(paper_count), 
+            std.error=sd(paper_count)/sqrt(length(paper_count))) %>%
+  ungroup()
+
+#plot of avg_paper_count by year with singletons
+#not used for publication
+ggplot(data = avg_papers_with1s) + 
+  geom_line(aes(x = as.factor(PY), 
+                y = avg_paper_count, 
+                color = Final_Gender, group = Final_Gender))
+
+#######Average no. of papers per year by gender 
+#without singletons
+non_single_authors<-currentdecs %>% #groupIDs for non-singleton authors
+  group_by(groupID) %>%
+  summarise(total = n()) %>%
+  filter(total > 1) %>%
+  dplyr::select(groupID)
+as.numeric(non_single_authors$groupID)
+without_singletons_leo<-currentdecs %>% 
+  filter(groupID %in% as.numeric(non_single_authors$groupID)) %>%
+  as_tibble() %>%
+  group_by(groupID, Final_Gender, PY) %>% 
+  summarize(paper_count=n()) %>% 
+  group_by(Final_Gender, PY) %>% 
+  summarize(avg_paper_count=mean(paper_count), 
+            std.error=sd(paper_count)/sqrt(length(paper_count)))
+
+#so when you plot without singletons every year
+#Graph not in manuscript
+ggplot(data = without_singletons_leo) + 
+  geom_line(aes(x = as.factor(PY), 
+                y = avg_paper_count, 
+                color = Final_Gender, group = Final_Gender))
+
+#Top 25 authors over this time period
+top_authors<-currentdecs %>% 
+  group_by(groupID, Final_Gender, Full_name) %>% 
+  summarize(paper_count=n()) %>%
+  arrange(desc(paper_count))
+top_authors
+
+#Top 10 countries (not counting unique authors just total paper output)
+top_countries<-currentdecs %>% 
+  group_by(country) %>% 
+  summarize(paper_count=n()) %>%
+  arrange(desc(paper_count))
+
+
+
+#'let's make a dataframe of papercounts for each unique author and 
+#'include their country, their total paper counts for every year. 
+my_model<-currentdecs %>% 
+  filter(groupID %in% as.numeric(non_single_authors$groupID)) %>%
+  group_by(groupID, Final_Gender, country, PY) %>% 
+  summarize(paper_count=n()) %>% 
+  filter(!paper_count == "NA") %>%
+  filter(!country == "NA") 
+my_model
+
+#'we want people who publish across multiple years of the decade, so let's
+#'say we only want people who have published in 5 of the ten years we have
+#'
+#'paste(my_model[7,1])
+my_model$rating<-NA
+my_model$rating<-as.character(my_model$rating)
+for (i in 1:nrow(my_model)){
+  if(length(unique(my_model$PY[my_model$groupID == paste(my_model[i,1])])) >= 5){
+    my_model[i,6]<-"consistent"
+  } else{
+    my_model[i,6]<-"inconsistent"
+  }
+}
+my_model
+#validate let's look at groupIDs 1 ,12, and 14
+currentdecs %>%
+  filter(groupID == 1) %>%
+  dplyr::select(PY) 
+currentdecs %>%
+  filter(groupID == 12) %>%
+  dplyr::select(PY) 
+currentdecs %>%
+  filter(groupID == 14) %>%
+  dplyr::select(PY) 
+
+
+#now let's get a dataset of authors who published 5 or more years
+consistent_people<-my_model %>%
+  filter(rating == "consistent")
+hist(consistent_people$paper_count)
+consistent_people$PY<-as.factor(consistent_people$PY)
+
+#plot of this data comparing total papers in consistent authors by year
+#plot not in paper. 
+consistent_people %>%
+  ungroup() %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(total_p_count = sum(paper_count)) %>%
+  ggplot(.) + 
+  geom_point(mapping = aes(x= PY, y = total_p_count, color = Final_Gender)) +
+  scale_y_log10()
+
+consistent_people$unique<-as.factor(as.character(consistent_people$groupID)) #just making an extra column 
+#for a factor version of groupID
+
+length(unique(consistent_people$groupID)) #only 449 
+#unique authors who have published across 5 years
+
+
+#let's look at the average paper count by sex by year by country
+#let's just plot the relationship between year and avgpaper by sex
+my_model %>% group_by(Final_Gender, country, PY) %>%
+  summarise(avg_paper = mean(paper_count)) %>%
+  ggplot(.) + geom_point(mapping = aes(x = PY, y = avg_paper, color = Final_Gender))
+my_model %>% filter(Final_Gender =="male") 
+my_model %>% filter(Final_Gender =="female")
+
+
+#'ok so for every unique author who has published across 5 unique years in the past decade
+#'what was their total amount of papers in this decade 
+my_model %>% group_by(groupID, Final_Gender) %>%
+  summarise(total_paper = n()) %>%
+  arrange(desc(total_paper)) %>%
+  ggplot(.) + geom_point(mapping = aes(x = Final_Gender, y = total_paper), position = position_jitter())
+
+#Next step would be to create a covariate of 
+#' the no. of unique year each author has published in and adding that as a 
+#' random effect
+#' 
+
+my_model$no_years<-NA
+my_model$no_years<-as.numeric(my_model$no_years)
+
+for (i in 1:nrow(my_model)){
+  my_model[i,7] <-length(unique(my_model$PY[my_model$groupID == paste(my_model[i,1])]))
+}
+
+#no. of pubs per person, each person, and the no. of unique years they have published
+Charlie_1 <-my_model %>% 
+  ungroup() %>%
+  group_by(groupID, Final_Gender, paper_count) %>%
+  summarise(numb_year_publishing = mean(no_years) , tot_paper_count = sum(paper_count)) %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(numb_year_publishing = mean(numb_year_publishing) , tot_paper_count = sum(paper_count)) %>%
+  mutate(publication_rate_decade = tot_paper_count/10, 
+         publication_rate_unique= tot_paper_count/numb_year_publishing)
+
+
+#distribution of the data
+ggplot(data = Charlie_1) + 
+  geom_histogram(mapping = aes(x = numb_year_publishing, fill= Final_Gender), 
+                 binwidth = 1, alpha = 0.6) +
+  labs(y = "No. of Authors", x = "Number of years with at least one publication",
+       fill = "SEX", color = "SEX") +
+  theme(legend.position = c(0.6,0.8)) +
+  geom_rug(aes(x = numb_year_publishing, y = 0, color = Final_Gender), 
+           position = position_jitter(height = 0),alpha = 0.5) +
+  theme_classic() +
+  theme(legend.position = c(0.8,0.8)) +
+  scale_fill_viridis_d() +
+  scale_colour_viridis_d()
+
+
+#######Desnity histograams of total papers 
+A<-ggplot(data = Charlie_1, mapping = aes(x = tot_paper_count, 
+                                        fill= Final_Gender, color = Final_Gender,
+)) + 
+  geom_density(mapping = aes(y = ..count..), 
+               alpha = 0.3, position = "stack") +
+  labs(y = "Density", x = "No. of Total Papers",
+       fill = "SEX", color = "SEX") +
+  scale_fill_viridis_d() +
+  scale_colour_viridis_d()+
+  theme_classic() +
+  theme(legend.position = c(0.35,0.85))  +
+  geom_rug(aes(x = tot_paper_count, y = 0, color = Final_Gender), 
+           position = position_jitter(height = 0),alpha = 0.5) +
+  xlim(0,20) 
+lets_Se %>% arrange(desc(tot_paper_count))
+
+#density histogram
+B<-ggplot(data = Charlie_1, mapping = aes(x = tot_paper_count, 
+                                        fill= Final_Gender, color = Final_Gender,
+)) + 
+  geom_density(mapping = aes(y = ..count..), 
+               alpha = 0.3, position = "stack") +
+  labs(y = "", x = "",title = "Outliers",
+       fill = "SEX", color = "SEX") +
+  scale_fill_viridis_d() +
+  scale_colour_viridis_d() +
+  theme_classic() +
+  theme(legend.position = "none", panel.border = element_rect(colour = "grey", fill=NA, size=3)
+  )  +
+  geom_rug(aes(x = tot_paper_count, y = 0, color = Final_Gender), 
+           position = position_jitter(height = 0),alpha = 0.5) +
+  xlim(25,65)  
+
+#inset the density graphs
+A+ annotation_custom(ggplotGrob(B), xmin = 7, xmax = 20, 
+                     ymin = 500, ymax =1200)
+
+
+
+##let's plot this across time  where total papers ~ time
+per_year_per_author <-my_model %>%
+  group_by(Final_Gender, PY, country) %>%
+  summarise(total_papers = sum(paper_count))
+
+
+##let's plot this across time  where total papers ~ time
+#this will be figure X.x
+ggplot(per_year_per_author) +
+  geom_point(aes(x = Final_Gender, 
+                 total_papers)) +
+  labs(x = "Year", y = " Total Papers (log-scale)", fill = "GENDER") +
+  theme(legend.position = c(0.8,0.15)) +
+  scale_fill_grey()
+
+#this graph shows that across years it's different between genders
+#the none boxplot format of the graph above
+ggplot(per_year_per_author) +
+  geom_point(aes(x = PY, 
+                 total_papers, color = Final_Gender)) +
+  scale_y_log10() 
+
+#make PY factor for random effect
+per_year_per_author$year<-as.factor(per_year_per_author$PY)
+
+##this is the model for total paper counts as a function of gender with
+#the random effect of years
+
+hist(per_year_per_author$total_papers)
+
+mean(per_year_per_author$total_papers)
+var(per_year_per_author$total_papers)
+
+#run negbinom model
+#we want to see does total paper counts between sexes differ while accounting for country differences
+#
+
+
+m1<-glmer.nb(data = per_year_per_author, total_papers~ 
+               Final_Gender + (1|country)+ (1|year))
+m2<-glmer(data = per_year_per_author, total_papers~ 
+             Final_Gender + (1|country) + (1|year), family = "poisson")
+
+m0<-glm.nb(data = per_year_per_author, total_papers~1 )
+
+
+
+
+isSingular(m6) #check for singularity after
+AICtab(m1,m2,m0) #neg binom wins out
+summary(m1)
+r.squaredGLMM(m1)
+
+#check dispersion parameter of negative binomial
+N <- nrow(per_year_per_author)
+E2 <- resid(m1,type="pearson")
+p.nbin <- length(coef(m1))+1
+Dispersion.nbin <- sum(E2^2)/(N-p.nbin)
+Dispersion.nbin
+#slightly underdispersed
+
+
+#let's plot the model
+newdat<-data.frame(sex=c("?","female", "male")) #make new data
+m2mm<-model.matrix(~sex,newdat) #cereate a model matrix of you paramters from the dummy data
+y<-m2mm%*%fixef(m1) #multiply the m2m2 matrix with the model coefficients
+pvar1 <- diag(m2mm %*% tcrossprod(vcov(m1),m2mm)) 
+
+newdat <- data.frame(
+  sex=newdat$sex,
+  y=exp(y),
+  plo = exp(y-1.96*sqrt(pvar1))
+  , phi = exp(y+1.96*sqrt(pvar1))
+)
+
+#let's capitalize female and male
+levels(newdat$sex)<- c("Unknown", "Female", "Male")
+
+sex_model<-ggplot(NULL) +
+  geom_errorbar(data = newdat,
+                aes(x = sex, ymin = plo, ymax = phi),size =3, color = "grey",
+                width = 0, alpha = 0.7
+  ) +
+  geom_point(data = newdat, mapping = aes(x = sex, y = y),
+             size = 3)  + theme_classic() +
+  labs(x = "Sex" , y =" Predicted total paper counts") +
+  theme(axis.text = element_text(size = 15), axis.title = element_text(size =15)) 
+  
+sex_model
+
+
+####Established authors
+
+
+#first let's remove singleetons
+#find singletons
+singleton_authors<-currentdecs %>%
+  group_by(groupID) %>%
+  summarise(total = n()) %>%
+  filter(total == 1) 
+nrow(singleton_authors)
+#now let's grab year data for these single authors
+currentdecs2<-currentdecs %>% 
+  filter(!groupID %in% as.numeric(singleton_authors$groupID))
+currentdecs3<-currentdecs %>% 
+  filter(groupID %in% as.numeric(singleton_authors$groupID))
+
+#without singletons
+currentdecs2 %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(Final_Gender) %>%
+  summarise(total = n()) %>%
+  mutate(total/ sum(total))
+
+##########################
+#without singletons average yearly
+trial<-currentdecs2 %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(groupID, Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  group_by(PY) %>%
+  mutate(props= total/sum(total))
+mean(trial$props[trial$Final_Gender =="female"])         
+mean(trial$props[trial$Final_Gender =="male"])         
+mean(trial$props[trial$Final_Gender =="?"])         
+
+#without singletons annual avergae paper counts
+tot_papper<-trial %>%
+  group_by(PY) %>%
+  summarise(tot_paper = sum(total))
+mean(tot_papper$tot_paper)
+
+#without singletons annual average number of authors per year (without singletons)
+currentdecs2 %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(PY) %>%
+  summarise(total = n()) %>%
+  dplyr::select(total) %>%
+  summarise(mean(total))
+
+length(unique(currentdecs2$refID))
+
+
+
+#####################
+#only singletons
+currentdecs3 %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(Final_Gender) %>%
+  summarise(total = n()) %>%
+  mutate(total/ sum(total))
+length(unique(currentdecs3$refID))
+#only singletons average yearly
+trial<-currentdecs3 %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(groupID, Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(total = n()) %>%
+  group_by(PY) %>%
+  mutate(props= total/sum(total))
+mean(trial$props[trial$Final_Gender =="female"])         
+mean(trial$props[trial$Final_Gender =="male"])         
+mean(trial$props[trial$Final_Gender =="?"])         
+
+#only singletons annual avergae paper counts
+tot_papper<-trial %>%
+  group_by(PY) %>%
+  summarise(tot_paper = sum(total))
+mean(tot_papper$tot_paper)
+
+#annual average number of authors per year (without singletons)
+currentdecs3 %>%
+  dplyr::select(groupID, Final_Gender, PY) %>%
+  group_by(PY) %>%
+  summarise(total = n()) %>%
+  dplyr::select(total) %>%
+  summarise(mean(total))
+
+
+####################
+#with singletons
+currentdecs %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(groupID, Final_Gender) %>%
+  summarise(total = n()) %>%
+  dplyr::select(groupID, Final_Gender) %>%
+  group_by(Final_Gender) %>%
+  summarise(total = n()) %>%
+  mutate(total/ sum(total))
+
+length(unique(currentdecs$refID))
+
+
+
+
+average_paper_counts<-per_year_per_author %>%
+  group_by(Final_Gender, PY) %>%
+  summarise(totals= sum(total_papers)) %>%
+  group_by(PY) %>%
+  mutate(proportion_of_total_papers = totals/sum(totals)) 
+colnames(average_paper_counts)<-c('Sex', 'Year', 'Total Papers', 'Proportions of Paper Counts')
+write.csv(average_paper_counts, "~/Desktop/Yearly_Numbers_Paper_Counts.csv")
+mean(average_paper_counts$proportion_of_total_papers[average_paper_counts$Final_Gender == "male"])
+
+##let's just include male and females and model their proportions
+#in top ten countries, including singletons!
+props_country_year_top_ten<-currentdecs %>%
+  #filter(groupID %in% as.numeric(non_single_authors$groupID)) %>% #this code removes singletons
+  dplyr::select(PY, country, Final_Gender) %>%
+  group_by(PY, country, Final_Gender) %>%
+  summarise(paper_total = n()) %>%
+  ungroup() %>%
+  group_by(PY, country) %>%
+  mutate(auth_proportions = paper_total/ sum(paper_total)) %>%
+  filter(country %in% c("USA", "Brazil", "Germany", "Peoples R China", "Australia",
+                        "Japan", "France", "UK", "Spain", "Mexico")) %>%
+  filter(!Final_Gender == "?") %>%
+  ungroup()
+
+prop_country_year_top_ten_all <-props_country_year_top_ten
+#this dataset gives male and fmelae proportion of authorship in top ten countries
+prop_country_year_top_ten_all %>%
+  group_by(Final_Gender) %>%
+  summarise(avvg = mean(auth_proportions))
+mean(prop_country_year_top_ten_all$auth_proportions)
+
+
+prop_country_year_top_ten_all %>%
+  group_by(country, Final_Gender) %>%
+  summarise(avvg = mean(auth_proportions))
+
+
+prop_country_year_top_ten <-props_country_year_top_ten %>%
+  filter(Final_Gender == "female")
+
+
+#remove singletons to see other stats
+props_country_year_top_ten_s<-currentdecs %>%
+  filter(groupID %in% as.numeric(non_single_authors$groupID)) %>% #this code removes singletons
+  dplyr::select(PY, country, Final_Gender) %>%
+  group_by(PY, country, Final_Gender) %>%
+  summarise(paper_total = n()) %>%
+  ungroup() %>%
+  group_by(PY, country) %>%
+  mutate(auth_proportions = paper_total/ sum(paper_total)) %>%
+  filter(country %in% c("USA", "Brazil", "Germany", "Peoples R China", "Australia",
+                        "Japan", "France", "UK", "Spain", "Mexico")) %>%
+  filter(!Final_Gender == "?") %>%
+  ungroup()
+
+props_country_year_top_ten_s %>%
+  group_by(Final_Gender) %>%
+  summarise(avvg = mean(auth_proportions))
+mean(prop_country_year_top_ten_all$auth_proportions)
+#####
+
+
+
+prop_country_year_top_ten$PY <- as.factor(prop_country_year_top_ten$PY)
+mid <- mean(prop_country_year_top_ten$auth_proportions) #get the mean of the proportions
+#I want  to change the country name "Peoples R China" to China 
+#for the heat map and then add it to the world map
+
+levels(prop_country_year_top_ten$country)[levels(prop_country_year_top_ten$country)=="Peoples R China"] <- "China"
+#this plot should show proportions as a heat map
+heat<-ggplot(data = prop_country_year_top_ten) +
+  geom_tile(aes(x = PY, y = fct_reorder(factor(country), auth_proportions), fill = auth_proportions)) +
+  scale_fill_viridis_c() +
+  labs(y = "", x = "", fill = "Women \nAuthorship \nProportion") +
+  theme(
+    axis.line = element_blank(), panel.background = element_rect(fill = "white"), axis.text = element_text(size =15)
+  )
+heat
+
+prop_country_year_top_ten %>%
+  group_by(country) %>%
+  summarise(average_auth_proportions = mean(auth_proportions))
+
+
+#modeling female authorship proportion across years
+ggplot(prop_country_year_top_ten) + 
+  geom_boxplot(aes(x = PY, y = auth_proportions))
+ggplot(prop_country_year_top_ten) + 
+  geom_boxplot(aes(x = country, y = auth_proportions))
+str(prop_country_year_top_ten)
+hist(prop_country_year_top_ten$auth_proportions)
+
+#here we make years as continuous
+prop_country_year_top_ten$years_cont<-as.numeric(as.character(prop_country_year_top_ten$PY))
+#drop unnecessary levels in factor variables
+prop_country_year_top_ten <- prop_country_year_top_ten %>%
+  droplevels()
+
+##model
+fm1.1<-lmer(data = prop_country_year_top_ten, auth_proportions ~
+                     years_cont + (1|country))
+summary(fm1.1)
+r.squaredGLMM(fm1.1)
+
+###checking residulas of the model
+plot(fm1.1)
+hist(residuals(fm1.1))
+
+#let's extract effect sizes from the model and plot them
+years_cont<-seq(2008,2017,1)
+country <- unique(prop_country_year_top_ten$country)
+newdat<-expand.grid(years_cont, country)
+newdat$predict<-predict(fm1.1, data = newdat)
+colnames(newdat) <- c("year", "country", "predicted")
+
+library(gganimate)
+#Ben Bolkers code
+## note that expand.grid() orders factor levels by *order of
+## appearance* -- must match levels(Orthodont$Sex)
+newdat <- expand.grid(years_cont=c(seq(2020, 2080,1)), 
+                      country=c("Australia", "Brazil", "UK", "France", "Germany", "Japan",
+                                "Mexico", "Peoples R China", "Spain", "USA"),
+                      
+                      auth_proportions =0) 
+newdat$auth_proportions <- predict(fm1.1, newdat, level = 0)
+#change peoples R china to China for plotting
+levels(newdat$country)[8]<-"China"
+
+
+
+#actual plot of predictions
+ggplot(newdat) +
+  geom_hline(yintercept=0.5, linetype="dashed", 
+                color = "grey")+
+  geom_line(mapping = aes(x = round(years_cont), y = auth_proportions),color = "blue") +
+  facet_wrap(~country, ncol = 5) +
+  theme_classic() +
+  theme(axis.text.x = element_blank(),
+        axis.title = element_text(size =15), plot.subtitle = element_text(size = 20),
+        axis.title.x =element_text(size = 15), strip.text.x = element_text(size =12),
+        axis.ticks.x = element_blank()) +
+  labs(x ="Years 2020 to 2080", 
+       y = "Female Authorship Proportion") 
+
+
+
+###effects plot of actual years sampled
+levels(eff.p1$country)[7]<-"China"
+levels(prop_country_year_top_ten$country)[8]<-"China"
+ggplot(data = NULL) + 
+  geom_line(data = eff.p1, mapping=aes(x = years_cont, y = fit), color = "blue") +
+  geom_ribbon(data = eff.p1, mapping = aes(x= years_cont, ymin=lower, ymax= upper, 
+                            ), alpha = 0.1) +
+  facet_wrap(~country, ncol = 5) +
+  labs(x = "Years 2008 to 2017", y = "Female Authorship Proportions") +
+  geom_point(data = prop_country_year_top_ten, 
+             aes(x = years_cont, y = auth_proportions)) + theme_classic() +
+  theme(axis.text = element_blank(), axis.ticks.x = element_blank(),
+        strip.text.x = element_text(size = 15), axis.title = element_text(size = 14)) 
+
+summary(fm1.1)
+
+
+
+
+#fig X.x in manuscript
+Bravo_1 + alpha_1 - heat+ plot_layout(ncol= 1, heights = c(1,0.5)) 
+
+
+###authors by gender by year '87, '97, '08 & '17
+July_final_simple<-read.csv("~/Downloads/authors_prev_decades_RAA_050720.csv")
+unique(July_final_simple$groupID)
+length(unique(July_final_simple$groupID[July_final_simple$year == "1997"]))
+length(unique(July_final_simple$groupID[July_final_simple$year == "1987"]))
+length(unique(July_final_simple$refID[July_final_simple$year == "1997"]))
+length(unique(July_final_simple$refID[July_final_simple$year == "1987"]))
+
+
+
+###authorship by sex proportions for 1987 and 1997
+prop_87_97 <-July_final_simple %>%
+  group_by(groupID, year, Final_Gender) %>%
+  summarise(total_paper = n()) %>%
+  ungroup() %>%
+  group_by(year, Final_Gender) %>%
+  summarise(total_papers_by_year = sum(total_paper)) %>%
+  group_by(year) %>%
+  mutate(proportions = total_papers_by_year/ sum(total_papers_by_year))
+
+#now let's get the authorship proportions for 2007, 2018
+
+prop_07_18<-currentdecs %>%
+  group_by(groupID, PY, Final_Gender) %>%
+  summarise(total_paper = n()) %>%
+  ungroup() %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(total_papers_by_year = sum(total_paper)) %>%
+  mutate(proportions = total_papers_by_year/ sum(total_papers_by_year)) %>%
+  filter(PY == 2008 | PY == 2017) %>%
+  rename('year' = PY)
+
+
+# avg paper count across 1987 to end of decade
+#1987.1997
+avg_paper_87_97<-July_final_simple %>% 
+  as_tibble() %>%
+  group_by(groupID, Final_Gender, year) %>% 
+  summarize(paper_count=n()) %>% 
+  group_by(Final_Gender, year) %>% 
+  summarize(avg_paper_count=mean(paper_count), 
+            std.error=sd(paper_count)/sqrt(length(paper_count)))
+
+#2007-2018
+avg_paper_published<-currentdecs %>% 
+  as_tibble() %>%
+  group_by(groupID, Final_Gender, PY) %>% 
+  summarize(paper_count=n()) %>% 
+  group_by(Final_Gender, PY) %>% 
+  summarize(avg_paper_count=mean(paper_count), 
+            std.error=sd(paper_count)/sqrt(length(paper_count)))
+colnames(avg_paper_87_97)<-colnames(avg_paper_published)
+avg_paper_across<-rbind(avg_paper_87_97,avg_paper_published)
+
+unique(avg_paper_across$Final_Gender)
+class(avg_paper_across$Final_Gender)
+
+avg_paper_across$Final_Gender[avg_paper_across$Final_Gender==""]<-"?"
+
+##############plot Average paper count for all sexes
+###across all years
+avg_paper_across<-avg_paper_across %>% ungroup()
+pos <- position_dodge(0.8)
+multidecade<-ggplot(data = avg_paper_across, aes(x = as.factor(PY), y = avg_paper_count, 
+                                    fill=Final_Gender,
+                                    group = Final_Gender
+                                    )) + 
+  geom_bar(stat = 'identity', 
+           position = pos) +
+  geom_errorbar(position = pos,
+                width=0.2, aes(x = as.factor(PY), ymin = avg_paper_count-std.error, 
+                                ymax = avg_paper_count + std.error)) +
+  labs(y = "Average number of papers published annually", x = "Year", fill = "Gender") +
+  theme_classic() + scale_fill_grey() +
+  theme(axis.title.x = element_blank(), axis.text.x = element_text(size = 25, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 25),
+                                                              axis.title.y = element_text(size = 25) ,
+        legend.text = element_text(size = 25),
+        legend.title = element_text(size = 25)) +
+  geom_vline(xintercept = 2.5, lty = 'dashed')+ 
+  scale_fill_manual(values = c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    labels = c("Unknown", "Women", "Men")) 
+
+ggsave("multidecade.tiff", multidecade, dpi = 400)
+ggsave("multidecade.pdf", multidecade, dpi = 600)
+
+
+
+#######Andrea's new graph
+###Using updated 87 & 97 tablee
+data_8797<-read.csv("~/Downloads/authors_prev_decades_RAA_050720.csv")
+head(data_8797)
+library(tidyverse)
+
+data_8797 %>%
+  group_by(groupID, year) %>%
+  summarise(n())
+
+unique(data_8797$Final_Gender)
+#make all unknowns same identifier
+data_8797$Final_Gender[data_8797$Final_Gender==""]<- "?"
+
+
+length(unique(data_8797$groupID[data_8797$year == "1987"]))
+length(unique(data_8797$groupID[data_8797$year == "1997"]))
+
+
+###authorship by sex proportions for 1987 and 1997
+prop_87_97 <-data_8797 %>%
+  group_by(groupID, year, Final_Gender) %>%
+  summarise(total_paper = n()) %>%
+  ungroup() %>%
+  group_by(year, Final_Gender) %>%
+  summarise(total_papers_by_year = sum(total_paper)) %>%
+  group_by(year) %>%
+  mutate(proportions = total_papers_by_year/ sum(total_papers_by_year))
+
+
+#props for 07-18
+prop_07_18<-currentdecs %>%
+  group_by(groupID, PY, Final_Gender) %>%
+  summarise(total_paper = n()) %>%
+  ungroup() %>%
+  group_by(PY, Final_Gender) %>%
+  summarise(total_papers_by_year = sum(total_paper)) %>%
+  mutate(proportions = total_papers_by_year/ sum(total_papers_by_year)) %>%
+  rename('year' = PY)
+
+
+data_graph<-rbind(prop_87_97, prop_07_18)
+multi_year<-ggplot(data = data_graph, aes(x = as.factor(year), y = proportions, 
+                                                 fill=Final_Gender,
+                                                 group = Final_Gender
+)) + 
+  geom_bar(stat = 'identity', 
+           position = pos)  +
+  labs(y = "Authorship Proportion by Gender", x = "Year", fill = "Gender") +
+  theme_classic() + scale_fill_grey() +
+  theme(axis.title.x = element_blank(), axis.text.x = element_text(size = 25, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 25),
+        axis.title.y = element_text(size = 25) ,
+        legend.text = element_text(size = 25),
+        legend.title = element_text(size = 25)) +
+  geom_vline(xintercept = 2.5, lty = 'dashed')+ 
+  scale_fill_manual(values = c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    labels = c("Unknown", "Women", "Men")) 
+
+ggsave("multi-year-authorship.tiff", multi_year, dpi = 400)
+ggsave("multi-year-authorship.pdf", multi_year, dpi = 600)
+
+
+
+###average_paper_count
+
+
+across_time<-rbind(prop_87_97, prop_07_18)
+across_time$Final_Gender[across_time$Final_Gender==""]<-"?"
+
+label_frame<-across_time %>%
+  filter(Final_Gender == "female") %>%
+  mutate(new_props = proportions *100)
+
+singleyear_measure<-ggplot(across_time) +
+  geom_bar(stat = 'identity', mapping = aes(x = as.factor(year),
+                                            y = proportions*100, 
+                                            fill = Final_Gender),
+           position = position_dodge()) +
+  scale_fill_manual(values=c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    labels = c("Unknown", "Female", "Male")) +
+  theme_classic() + 
+  labs(x = "Year", y = "Sex Authorship Percentage",fill="Sex of Author") +
+  theme(axis.title.x =element_blank(), axis.text =  element_text(size = 15),
+        axis.title = element_text(size = 15),
+        legend.text = element_text(size = 15), legend.title = element_text(size = 15)) +
+  scale_fill_manual(values = c("#440154FF","#29AF7FFF", "#FDE725FF"),
+                    labels = c("Unknown", "Women", "Men")) +
+  geom_text(data = label_frame, aes(x = as.factor(year),
+                                    y = new_props, 
+                                    label = round(new_props,2)), vjust =-1, size = 7)
+
+ggsave("singleyeear.tiff", singleyear_measure, dpi = 400)
+
+
+lm_four_years<-lm(data = across_time, proportions ~year)
+summary(lm_four_years)
+
+########GDP DATA part
+#read in GDP data
+GDP<-read.csv("~/Downloads/GDP.csv", encoding = 'UTF-8')
+
+#using rachel atchison's code to rename certain countries
+#based on GDP data
+currentdecs_GDP<-currentdecs %>% 
+  filter(country!="Taiwan")
+levels(currentdecs_GDP$country)[levels(currentdecs_GDP$country)=="England"] <- "UK"
+levels(currentdecs_GDP$country)[levels(currentdecs_GDP$country)=="Wales"] <- "UK"
+levels(currentdecs_GDP$country)[levels(currentdecs_GDP$country)=="Scotland"] <- "UK"
+levels(currentdecs_GDP$country)[levels(currentdecs_GDP$country)=="French Guiana"] <- "France"
+levels(currentdecs_GDP$country)[levels(currentdecs_GDP$country)=="Guadeloupe"] <- "France"
+#end of rachel's code
+
+####syncing gdp data with paper data from 2007 to 2018
+#also calulculating per_Capita GDP
+gdp_data<-GDP %>% pivot_wider(names_from = Series.Code, values_from = 3:12) %>%
+  dplyr::select(c(1,2,4,6,8,10,12,14,16,18,20)) %>%
+  pivot_longer(cols = c(2:ncol(.)), names_to = 'year', values_to = 'gdp') %>%
+  mutate(year = stringr::str_extract(year,"\\d{4}"),
+         gdp = as.numeric(as.character(gdp))) 
+per_capita<-GDP %>% pivot_wider(names_from = Series.Code, values_from = 3:12) %>% #we spread data
+  dplyr::select(seq(1, by = 2, length.out = 11)) %>% #select pop variables basically the odd columns
+  pivot_longer(cols = c(2:ncol(.)), names_to = 'year', values_to = 'pop') %>% #make longer by country and year
+  mutate(year = stringr::str_extract(year,"\\d{4}"), #take first 4 numbers in year for actual year
+         pop = as.numeric(as.character(pop))) %>% #change pop to a numeric
+  left_join(gdp_data, by =c("Country", "year")) %>% #join the data with the gdp data we did above
+  mutate(per_capita = gdp/pop) %>%
+  mutate(year = as.numeric(year),
+         Country = as.character(Country))
+
+papers_year_country<-currentdecs %>% #get paper data by year and by country
+  filter(country!="Taiwan") %>% #taiwan doesn't gave gdp data
+  group_by(refID, country, PY, Final_Gender) %>% 
+  summarize(paper_count=n()) %>% 
+  group_by(country, PY, Final_Gender) %>%
+  summarize(paper_count=n()) %>%
+  ungroup() %>%
+  mutate(country = as.character(country))
+
+final_data<-papers_year_country %>% #merge paper data with per capita data
+  left_join(per_capita, by = c('country' = 'Country', "PY" = "year"))
+
+#now calculate female proportions and re-add the gpd data
+final_data_no_female_filter<-final_data %>%
+  group_by(PY,country, Final_Gender) %>%
+  summarise(paper_counts_total = sum(paper_count)) %>%
+  mutate(proportions = paper_counts_total/sum(paper_counts_total)) %>%
+  left_join(final_data, by = c("PY", "country", "Final_Gender")) %>%
+  dplyr::select(PY, country, Final_Gender, paper_counts_total, proportions, per_capita) 
+
+#filtering for just female proportions
+final_data_just_female<-final_data %>%
+  group_by(PY,country, Final_Gender) %>%
+  summarise(paper_counts_total = sum(paper_count)) %>%
+  mutate(proportions = paper_counts_total/sum(paper_counts_total)) %>%
+  left_join(final_data, by = c("PY", "country", "Final_Gender")) %>%
+  dplyr::select(PY, country, Final_Gender, paper_counts_total, proportions, per_capita) %>%
+  filter(Final_Gender == "female")
+
+
+
+#now we need to select countries with all greater than or equal to 8 years
+#with both paper and gdp data
+country_w_data<-final_data %>%
+  filter(Final_Gender == "female") %>%
+  group_by(country) %>%
+  summarise(total = n()) %>%
+  filter(total >= 8) %>%
+  dplyr::select(country)
+
+
+###filter for those countries above (greater than 8 points)
+#scale per capita data and square per capita data to m ake another variable for
+#potentioal quadratic models
+all_countries_with_data<-final_data_just_female %>% 
+  ungroup() %>%
+  filter(country %in% paste(country_w_data$country)) %>%
+  mutate(scaled_per_capita = scale(per_capita)[1:nrow(.)],
+         scaled_per_capita_2 = scaled_per_capita^2)
+
+ggplot(all_countries_with_data) +
+  geom_point(aes(x = per_capita, y = proportions, color = country)) 
+
+all_countries_with_data$country<-as.factor(all_countries_with_data$country)
+
+all_countries_with_data$year<-as.factor(all_countries_with_data$PY)
+
+hist(all_countries_with_data$proportions)
+
+#plot the relationship between percapita GDP and country
+#looks like it doesn't change over time as much
+ggplot(all_countries_with_data,aes(group = country)) +
+  geom_line(aes(x = PY, y = per_capita, color = country))
+
+
+hist(all_countries_with_data$proportions)
+all_countries_with_data$year<-as.factor(all_countries_with_data$PY)
+fm1<- glmer(data = all_countries_with_data, proportions ~ scaled_per_capita + (1|year) +
+              (1|country), family = "Gamma")
+summary(fm1)
+r.squaredGLMM(fm1)
+piecewiseSEM::rsquared(fm1)
+#let's run separate linear models on this to see whether or not coefficicents change 
+country_model <- function(df) {
+  model_object<-lm(per_capita ~ PY, data = df)
+}
+
+country_gdp_year_coefs<-all_countries_with_data %>%
+  group_by(country) %>%
+  nest() %>%
+  mutate(model_lm = map(data, country_model)) %>%
+  mutate(coef_models = map(model_lm, broom::tidy),
+         r_square = map(model_lm, broom::glance)) %>%
+  unnest(coef_models) %>%
+  filter(term == "PY") 
+  
+country_gdp_year_rsquare<-all_countries_with_data %>%
+    group_by(country) %>%
+    nest() %>%
+    mutate(model_lm = map(data, country_model)) %>%
+    mutate(coef_models = map(model_lm, broom::tidy),
+           r_square = map(model_lm, broom::glance)) %>%
+             unnest(r_square)
+
+ggplot(NULL) + geom_point(data = country_gdp_year_coefs,
+                          aes(x = country, y = estimate)) +
+  geom_errorbar(data = country_gdp_year_coefs,
+                aes(x = country, 
+                    ymin = estimate-std.error, ymax = estimate +std.error),
+                width = 0) +
+  geom_point(data = subset(country_gdp_year_coefs, p.value < 0.05), 
+             aes(x = country, y = estimate), color = "red")+
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+ggplot(NULL) + geom_point(data = country_gdp_year_rsquare,
+                          aes(x = country, y = adj.r.squared)) +
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+
+
+
+#let's see if there is any effect of increases or decreases in female author proportion by gdp
+country_model <- function(df) {
+  model_object<-lm(proportions ~ per_capita, data = df)
+}
+
+country_gdp_female_coefs<-all_countries_with_data %>%
+  group_by(country) %>%
+  nest() %>%
+  mutate(model_lm = map(data, country_model)) %>%
+  mutate(coef_models = map(model_lm, broom::tidy),
+         variance_explained = map(model_lm, broom::glance)) %>%
+  unnest(coef_models) %>%
+  filter(term == "per_capita") 
+
+country_gdp_female_R_square_1<-all_countries_with_data %>%
+  group_by(country) %>%
+  nest() %>%
+  mutate(model_lm = map(data, country_model)) %>%
+  mutate(coef_models = map(model_lm, broom::tidy),
+         variance_explained = map(model_lm, broom::glance)) %>%
+  unnest(variance_explained) %>%
+  dplyr::select(country, adj.r.squared)
+#note red dots represent signifanct coefficicents
+ggplot(NULL) + geom_point(data = country_gdp_female_coefs,
+                          aes(x = country, y = estimate)) +
+  geom_errorbar(data = country_gdp_female_coefs,
+                aes(x = country, 
+                    ymin = estimate-std.error, ymax = estimate +std.error),
+                width = 0) +
+  geom_point(data = subset(country_gdp_female_coefs, p.value < 0.05), 
+             aes(x = country, y = estimate), color = "red") + 
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+ggplot(NULL) + geom_point(data = country_gdp_female_R_square_1,
+                          aes(x = country, y = adj.r.squared)) +
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+ggplot(subset(all_countries_with_data, country == "Bulgaria")) +
+  geom_point(mapping = aes(x = per_capita, y = proportions)) + 
+  geom_smooth(method = "lm", aes(x = per_capita, y = proportions))
+
+
+##assessing rleationship between time and female proportions
+country_model <- function(df) {
+  model_object<-lm(proportions ~ PY, data = df)
+}
+
+country_time_female_coefs<-all_countries_with_data %>%
+  group_by(country) %>%
+  nest() %>%
+  mutate(model_lm = map(data, country_model)) %>%
+  mutate(coef_models = map(model_lm, broom::tidy),
+         variance_explained = map(model_lm, broom::glance)) %>%
+  unnest(coef_models) %>%
+  filter(term == "PY") 
+
+country_time_female_R_square_1<-all_countries_with_data %>%
+  group_by(country) %>%
+  nest() %>%
+  mutate(model_lm = map(data, country_model)) %>%
+  mutate(coef_models = map(model_lm, broom::tidy),
+         variance_explained = map(model_lm, broom::glance)) %>%
+  unnest(variance_explained) %>%
+  dplyr::select(country, adj.r.squared)
+#note red dots represent signifanct coefficicents
+ggplot(NULL) + geom_point(data = country_time_female_coefs,
+                          aes(x = country, y = estimate)) +
+  geom_errorbar(data = country_time_female_coefs,
+                aes(x = country, 
+                    ymin = estimate-std.error, ymax = estimate +std.error),
+                width = 0) +
+  geom_point(data = subset(country_time_female_coefs, p.value < 0.05), 
+             aes(x = country, y = estimate), color = "red") + 
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw()+
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+ggplot(NULL) + geom_point(data = country_time_female_R_square_1,
+                          aes(x = country, y = adj.r.squared)) +
+  geom_hline(yintercept = 0, color = "grey") +
+  theme_bw() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  coord_flip()
+
+#models using mixed-effects
+###thhis is the model used for paper GDP
+hist(all_countries_with_data$proportions)
+
+m1<-glmer(data = all_countries_with_data, proportions ~ scaled_per_capita + (1|country))
+summary(m1)
+r.squaredGLMM(m1)
+anova(m1)
+hist(residuals(m1))
+plot(fitted(m1), residuals(m1))
+plot(fitted(m1),all_countries_with_data$proportions )
+
+#nest the data
+model_Data_world<-final_data %>% 
+  ungroup() %>%
+  filter(country %in% c("USA", "Brazil", "Germany", "Peoples R China", "Australia",
+                        "Japan", "France", "UK", "Spain", "Mexico")) %>%
+  mutate(scaled_per_capita = scale(per_capita)[1:nrow(.)],
+         scaled_per_capita_2 = scaled_per_capita^2) %>%
+  group_by(country) %>%
+  nest() 
+
+
+
+#final thing to do
+#get female authorship heatmap global
+
+props_country_overall<-currentdecs %>%
+  #filter(groupID %in% as.numeric(non_single_authors$groupID)) %>% #this code removes singletons
+  group_by(country, Final_Gender) %>%
+  summarise(paper_total = n()) %>%
+  ungroup() %>%
+  group_by(country) %>%
+  mutate(auth_proportions = paper_total/ sum(paper_total)) %>%
+  filter(Final_Gender == "female") %>%
+  ungroup()
+
+#find singleton countries (countries that don't have enough data)
+#basically remove all countries with less than 3 years of data
+singleton_countries<-currentdecs %>%
+  #filter(groupID %in% as.numeric(non_single_authors$groupID)) %>% #this code removes singletons
+  group_by(PY, country) %>%
+  summarise(country_totals = n()) %>%
+  group_by(country) %>%
+  summarise(country_occurrences = n()) %>%
+  filter(!country_occurrences > 2) %>%
+  dplyr::select(country)
+
+##look at these countries
+currentdecs %>%
+  filter(country == "Estonia")
+
+
+singleton_countries_removed<-currentdecs %>%
+  filter(!country %in% paste(singleton_countries$country))
+
+#here we remove the singleton countries
+#also find decade-based proportion of female authorship
+#we also remove countries where there is a total paper count of 1
+props_country_overall<-currentdecs %>%
+  group_by(country, Final_Gender) %>%
+  summarise(paper_total = n()) %>%
+  mutate(auth_proportions = paper_total/ sum(paper_total)) %>%
+  filter(Final_Gender == "female") 
+
+#single paper total countries
+single_paper_totals<-currentdecs %>%
+  group_by(country) %>%
+  summarise(paper_total = n()) %>%
+  ungroup() %>%
+  filter(!paper_total >= 3) %>%
+  dplyr::select(country)
+
+#now we remove those paper counts of 1
+props_country_overall<-props_country_overall %>%
+  filter(!country %in% paste(single_paper_totals$country))
+
+
+
+
+#now let's map these proportions
+world <- map_data("world") 
+props_country_overall$country<-as.character(props_country_overall$country)
+
+#get our list of countries
+our_countries<-unique(props_country_overall$country)
+default_countries<-unique(world$region)
+
+#find out which rows in our dataset don't match to their countries
+which(our_countries %in% default_countries == FALSE)
+our_countries[which(our_countries %in% default_countries == FALSE)]
+#we need to edit our country list names to meet theirs
+sort(default_countries)
+
+#first remove NAs in our data set
+props_country_overall<-props_country_overall %>%
+  filter(!country == "NA")
+
+props_country_overall$country[props_country_overall$country == "Bosnia & Herceg"] <-"Bosnia and Herzegovina"
+props_country_overall$country[props_country_overall$country == "Cote Ivoire"] <-"Ivory Coast"
+props_country_overall$country[props_country_overall$country == "Papua N Guinea"] <-"Papua New Guinea"
+props_country_overall$country[props_country_overall$country == "Peoples R China"] <-"China"
+props_country_overall$country[props_country_overall$country == "Rep of Georgia"] <-"Georgia"
+#remove scotland , on our list but not on theirs
+props_country_overall$country[props_country_overall$country == "Eswatini"] <-"Swaziland"
+props_country_overall$country[props_country_overall$country == "Trinid & Tobago"] <-"Trinidad"
+
+
+#let's get ranges of the countries
+summary(props_country_overall$auth_proportions)
+mean(props_country_overall$auth_proportions)
+
+mean(props_country_year_top_ten$auth_proportions)
+mean(props_country_year_top_ten$auth_proportions)
+
+#export the global female authorship proportions
+supp_material_table<-props_country_overall %>%
+  dplyr::select(-paper_total)
+setwd("~/Desktop/")
+write.table(supp_material_table,file = "with_singletons_global_proportions.txt", sep = ",", quote = FALSE, row.names = F)
+
+heat_world<-world %>% left_join(props_country_overall, by = c("region" = 'country'))
+
+
+
+world_map_heat<-ggplot(heat_world, aes(x = long, y = lat,group = group)) +
+  geom_polygon(aes(fill = auth_proportions), color = "grey", size = 0.2) +
+  theme_classic() +
+  theme(panel.background = element_rect(fill = "aliceblue"),
+        axis.text = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(),
+        axis.title = element_blank(),
+        plot.background = element_rect(fill = "aliceblue"),
+        legend.background = element_blank(), legend.position = "right") +
+  scale_fill_viridis_c(option = "D") +
+  labs(fill= "Women \nAuthorship \nProportion") 
+world_map_heat
+length(unique(props_country_overall$country))
+
+
+###rayshader map
+heat_world %>%
+  arrange(desc(auth_proportions))
+world_map_heat<-ggplot(heat_world, aes(x = long, y = lat,group = group)) +
+  geom_polygon(aes(fill = auth_proportions)) +
+  theme_classic() +
+  theme(panel.background = element_blank(),
+        axis.text = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(),
+        axis.title = element_blank(),
+        plot.background = element_rect(fill = "aliceblue"),
+        legend.background = element_blank(), legend.position = "right", legend.text = element_text(size = 18), 
+        legend.title = element_text(size = 18)) +
+  scale_fill_viridis_c(option = "D") +
+  labs(fill= "Proportion of \nWomen \nAuthors")
+
+world_map_heat
+plot_gg(world_map_heat,  width = 5, windowsize = c(1920,1080), zoom = 0.45, shadow_intensity = 0.2)
+render_movie("look at the world", frames = 440, fps = 40, phi = 45, theta = 60)
+
+Sys.sleep(0.2)
+render_movie("look at the world", frames = 400, fps = 40)
+render_snapshot()
+render_highquality("hhighqualimage")
+heat2<-ggplot(data = prop_country_year_top_ten) +
+  geom_tile(aes(x = country, y = PY, fill = auth_proportions)) +
+  scale_fill_viridis_c() +
+  labs(y = "", x = "", fill = "Female \nAuthorship \nProportion") + theme(
+    axis.line = element_blank(), panel.background = element_rect(fill = "white"),
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+heat2
+plot_gg(heat2,multicore = T, width = 5,scale = 200, zoom = 0.8, raytrace = F)
+
+
+
+heat<-ggplot(data = prop_country_year_top_ten) +
+  geom_tile(aes(x = PY, y = fct_reorder(factor(country), auth_proportions), fill = auth_proportions)) +
+  scale_fill_viridis_c() +
+  labs(y = "", x = "", fill = "Proportion of \nWomen \nAuthors") +
+  theme(
+    axis.line = element_blank(), panel.background = element_rect(fill = "white"), axis.text = element_text(size =18),
+    legend.text = element_text(size = 16), legend.title = element_text(size = 18)
+  )
+heat
+
+bestmap<-world_map_heat + heat + plot_layout(nrow = 2, heights = c(2.5,1)) +
+  plot_annotation(tag_levels = 'A',
+                  ) & 
+  theme(plot.tag = element_text(size = 20))
+bestmap
+
+setwd("~/Desktop/WIM_PAPER_Figures/")
+ggsave("bestmap.pdf", bestmap, dpi = 800)
+
+
+prop_country_year_top_ten %>% group_by(country) %>%
+  summarise(mean_authorship = mean(auth_proportions)) %>%
+  arrange(desc(mean_authorship))
+#ggsave('tree_size_scaling.png', 
+       height = 10, 
+       width = 7,
+       dpi = 300)
+
+
+
+?r.squaredGLMM
